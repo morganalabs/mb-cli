@@ -1,6 +1,6 @@
 # mb CLI
 
-Command-line interface for [MorganaBench](https://gitlab.com/tii-aiir/aiir/dms) - RAG benchmark generation and LLM evaluation.
+Command-line interface for MorganaBench.
 
 ## Install
 
