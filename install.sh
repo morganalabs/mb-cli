@@ -70,12 +70,35 @@ curl -fsSL --output "${TMPDIR}/${CHECKSUMS_NAME}" "$CHECKSUMS_URL"
 # --- Verify checksum ---
 echo "Verifying checksum..."
 cd "$TMPDIR"
-if command -v sha256sum &>/dev/null; then
-  grep "${ARCHIVE_NAME}" "${CHECKSUMS_NAME}" | sha256sum --check --quiet
-elif command -v shasum &>/dev/null; then
-  grep "${ARCHIVE_NAME}" "${CHECKSUMS_NAME}" | shasum -a 256 --check --quiet
-else
-  echo "Warning: No sha256sum or shasum found, skipping checksum verification" >&2
+
+hash_sha256() {
+  local hash
+  if command -v gsha256sum &>/dev/null; then
+    gsha256sum "$1" | cut -d ' ' -f 1
+  elif command -v shasum &>/dev/null; then
+    shasum -a 256 "$1" | cut -d ' ' -f 1
+  elif command -v sha256sum &>/dev/null; then
+    hash=$(sha256sum "$1" 2>/dev/null || sha256sum -b "$1" 2>/dev/null) || true
+    if [ -n "$hash" ]; then
+      echo "$hash" | cut -d ' ' -f 1
+    fi
+  elif command -v openssl &>/dev/null; then
+    openssl dgst -sha256 "$1" | awk '{print $NF}'
+  else
+    echo ""
+  fi
+}
+
+EXPECTED=$(grep "${ARCHIVE_NAME}" "${CHECKSUMS_NAME}" | tr '\t' ' ' | cut -d ' ' -f 1)
+ACTUAL=$(hash_sha256 "${ARCHIVE_NAME}")
+
+if [ -z "$ACTUAL" ]; then
+  echo "Warning: No sha256sum, shasum, gsha256sum, or openssl found, skipping checksum verification" >&2
+elif [ "$EXPECTED" != "$ACTUAL" ]; then
+  echo "Error: Checksum mismatch for ${ARCHIVE_NAME}" >&2
+  echo "  Expected: $EXPECTED" >&2
+  echo "  Actual:   $ACTUAL" >&2
+  exit 1
 fi
 
 # --- Extract and install ---
