@@ -17,12 +17,18 @@ GITHUB_REPO="morganalabs/mb-cli"
 INSTALL_DIR="${INSTALL_DIR:-/usr/local/bin}"
 
 # --- Resolve version (latest if not specified) ---
+RELEASES_PAGE="https://github.com/${GITHUB_REPO}/releases"
 if [ -z "${MB_VERSION:-}" ]; then
   echo "Resolving latest version..."
+  # GitHub's /releases/latest points at the release flagged make_latest by CI,
+  # so this is the newest published version. The v? keeps the tag_name parse
+  # working whether or not the tag carries a leading "v".
   MB_VERSION=$(curl -fsSL "https://api.github.com/repos/${GITHUB_REPO}/releases/latest" \
-    | grep '"tag_name"' | head -1 | sed 's/.*"v\([^"]*\)".*/\1/')
+    | grep '"tag_name"' | head -1 \
+    | sed -E 's/.*"tag_name"[[:space:]]*:[[:space:]]*"v?([^"]+)".*/\1/')
   if [ -z "$MB_VERSION" ]; then
-    echo "Error: Could not determine latest version. Set MB_VERSION explicitly." >&2
+    echo "Error: Could not determine the latest version." >&2
+    echo "  See ${RELEASES_PAGE} or set MB_VERSION explicitly (e.g. MB_VERSION=0.4.0, no leading 'v')." >&2
     exit 1
   fi
   echo "Latest version: ${MB_VERSION}"
@@ -59,8 +65,9 @@ trap 'rm -rf "$TMPDIR"' EXIT
 
 echo "Downloading ${ARCHIVE_NAME}..."
 if ! curl -fSL --progress-bar --output "${TMPDIR}/${ARCHIVE_NAME}" "$DOWNLOAD_URL"; then
-  echo "Error: Download failed. Check that version ${MB_VERSION} exists at:" >&2
-  echo "  https://github.com/${GITHUB_REPO}/releases/tag/v${MB_VERSION}" >&2
+  echo "Error: Download failed — version ${MB_VERSION} may not exist." >&2
+  echo "  Available versions: ${RELEASES_PAGE}" >&2
+  echo "  (use the number without a leading 'v', e.g. MB_VERSION=0.4.0)" >&2
   exit 1
 fi
 
@@ -109,6 +116,7 @@ echo "Installing mb to ${INSTALL_DIR}/mb..."
 if [ -w "$INSTALL_DIR" ]; then
   mv mb "${INSTALL_DIR}/mb"
 else
+  echo "  ${INSTALL_DIR} is not writable; using sudo — you may be prompted for your system password." >&2
   sudo mv mb "${INSTALL_DIR}/mb"
 fi
 
