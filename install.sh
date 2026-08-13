@@ -20,13 +20,15 @@ INSTALL_DIR="${INSTALL_DIR:-/usr/local/bin}"
 RELEASES_PAGE="https://github.com/${GITHUB_REPO}/releases"
 if [ -z "${MB_VERSION:-}" ]; then
   echo "Resolving latest version..."
-  # GitHub's /releases/latest points at the release flagged make_latest by CI,
-  # so this is the newest published version. The v? keeps the tag_name parse
-  # working whether or not the tag carries a leading "v".
-  MB_VERSION=$(curl -fsSL "https://api.github.com/repos/${GITHUB_REPO}/releases/latest" \
-    | grep '"tag_name"' | head -1 \
-    | sed -E 's/.*"tag_name"[[:space:]]*:[[:space:]]*"v?([^"]+)".*/\1/')
-  if [ -z "$MB_VERSION" ]; then
+  # Resolve via the github.com redirect, not the api.github.com JSON endpoint:
+  # api.github.com caps unauthenticated requests at 60/hour per IP, which this
+  # install script (running on every user's machine, unauthenticated) burns
+  # through fast — it started 403ing installs. github.com/releases/latest
+  # redirects to .../releases/tag/vX.Y.Z and isn't subject to that limit.
+  FINAL_URL=$(curl -fsSL -o /dev/null -w '%{url_effective}' "https://github.com/${GITHUB_REPO}/releases/latest")
+  MB_VERSION="${FINAL_URL##*/tag/}"
+  MB_VERSION="${MB_VERSION#v}"
+  if [ -z "$MB_VERSION" ] || [ "$MB_VERSION" = "latest" ]; then
     echo "Error: Could not determine the latest version." >&2
     echo "  See ${RELEASES_PAGE} or set MB_VERSION explicitly (e.g. MB_VERSION=0.4.0, no leading 'v')." >&2
     exit 1
